@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHP Trainer — Учись программировать как папа!</title>
+    <meta name="description" content="Интерактивный тренажёр PHP для начинающих программистов">
+    <meta name="theme-color" content="#6C5CE7">
+
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- Ace Editor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/mode-php.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/mode-html.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/theme-monokai.js"></script>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="elephant">🐘</div>
+            <h1>PHP Trainer</h1>
+            <p>Загружаю PHP-движок...</p>
+            <div class="loading-bar">
+                <div class="loading-bar-fill" id="loading-bar-fill"></div>
+            </div>
+            <p class="loading-tip" id="loading-tip">Знаешь ли ты? PHP создан в 1995 году!</p>
+        </div>
+    </div>
+
+    <!-- Confetti container -->
+    <div id="confetti-container" class="confetti-container"></div>
+
+    <!-- Main App -->
+    <div id="app" class="app hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <span class="logo">🐘 PHP Trainer</span>
+            </div>
+            <div class="header-center">
+                <div class="progress-info">
+                    <span class="stars-display" id="stars-display"></span>
+                    <span class="badge-count" id="badge-count" title="Бейджи">🏆 0</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn-icon" id="btn-achievements" title="Мои достижения">🏅</button>
+                <button class="btn-icon" id="btn-projects" title="Мои проекты">💾</button>
+            </div>
+        </header>
+
+        <!-- Lesson Selector -->
+        <div id="lesson-selector" class="lesson-selector">
+            <div class="lesson-selector-header">
+                <h2>Выбери урок</h2>
+                <p>Каждый урок — новая суперсила! 💪</p>
+            </div>
+            <div class="lesson-grid" id="lesson-grid">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+
+        <!-- Workspace (hidden until lesson selected) -->
+        <div id="workspace" class="workspace hidden">
+            <!-- Lesson Info Bar -->
+            <div class="lesson-bar">
+                <button class="btn-back" id="btn-back-to-lessons">← Уроки</button>
+                <h2 class="lesson-title" id="lesson-title">Урок 1</h2>
+                <div class="lesson-actions">
+                    <button class="btn-hint" id="btn-hint" title="Подсказка">💡 Подсказка</button>
+                    <button class="btn-reference" id="btn-reference" title="Справочник HTML и PHP">📖 Справочник</button>
+                    <button class="btn-reset" id="btn-reset" title="Сбросить код">🔄 Сброс</button>
+                </div>
+            </div>
+
+            <!-- Mascot + Instructions -->
+            <div class="instruction-panel" id="instruction-panel">
+                <div class="mascot-bubble">
+                    <span class="mascot">🐘</span>
+                    <div class="bubble">
+                        <p id="mascot-text">Привет! Давай писать код!</p>
+                    </div>
+                </div>
+                <div class="scratch-comparison hidden" id="scratch-comparison">
+                    <span class="scratch-label">Scratch vs PHP:</span>
+                    <span id="scratch-text"></span>
+                </div>
+            </div>
+
+            <!-- Challenge Info -->
+            <div class="challenge-panel" id="challenge-panel">
+                <div class="challenge-header">
+                    <span>🎯 Задание:</span>
+                    <span class="challenge-progress" id="challenge-progress">1/3</span>
+                </div>
+                <p class="challenge-text" id="challenge-text">Напиши свой первый код!</p>
+                <p class="challenge-hint-auto">Выполни задание в коде и нажми <b>ЗАПУСТИТЬ!</b> — следующее откроется автоматически</p>
+            </div>
+
+            <!-- Editors -->
+            <div class="editors-container">
+                <div class="editor-pane">
+                    <div class="editor-tab">
+                        <span class="editor-tab-icon">🌐</span>
+                        <span>Мой сайт (HTML)</span>
+                    </div>
+                    <div id="html-editor" class="code-editor"></div>
+                </div>
+                <div class="editor-pane">
+                    <div class="editor-tab">
+                        <span class="editor-tab-icon">🐘</span>
+                        <span>Мой PHP код</span>
+                    </div>
+                    <div id="php-editor" class="code-editor"></div>
+                </div>
+            </div>
+
+            <!-- Run Button -->
+            <div class="run-bar">
+                <button class="btn-run" id="btn-run">
+                    <span class="run-icon">▶</span> ЗАПУСТИТЬ!
+                </button>
+                <div class="run-status" id="run-status"></div>
+            </div>
+
+            <!-- Preview -->
+            <div class="preview-container" id="preview-container">
+                <div class="preview-resize-handle" id="preview-resize-handle"></div>
+                <div class="preview-tab">
+                    <span>👁 Результат</span>
+                    <button class="btn-open-window" id="btn-open-window" title="Открыть в новом окне">🪟 В новом окне</button>
+                </div>
+                <div class="preview-area" id="preview-area">
+                    <div class="preview-placeholder">
+                        Нажми <strong>ЗАПУСТИТЬ!</strong> чтобы увидеть результат
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hint Modal -->
+            <div class="hint-modal hidden" id="hint-modal">
+                <div class="hint-modal-content">
+                    <div class="hint-modal-header">
+                        <span>💡 Подсказка</span>
+                        <button class="hint-close" id="hint-close">✕</button>
+                    </div>
+                    <div class="hint-body" id="hint-body"></div>
+                    <div class="hint-nav">
+                        <button class="btn-small" id="hint-prev">← Назад</button>
+                        <span id="hint-counter">1/3</span>
+                        <button class="btn-small" id="hint-next">Далее →</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reference Modal -->
+        <div class="modal hidden" id="reference-modal">
+            <div class="modal-content reference-content">
+                <div class="modal-header">
+                    <h2>📖 Справочник</h2>
+                    <button class="modal-close" id="reference-close">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="ref-tabs">
+                        <button class="ref-tab active" data-ref="html">🌐 HTML-теги</button>
+                        <button class="ref-tab" data-ref="css">🎨 CSS-стили</button>
+                        <button class="ref-tab" data-ref="php">🐘 PHP</button>
+                    </div>
+                    <div class="ref-section" id="ref-html">
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;h1&gt;...&lt;/h1&gt;</div>
+                            <div class="ref-desc">Самый большой заголовок. Бывают от <code>&lt;h1&gt;</code> (огромный) до <code>&lt;h6&gt;</code> (маленький)</div>
+                            <div class="ref-example">Пример: <code>&lt;h1&gt;Привет!&lt;/h1&gt;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;p&gt;...&lt;/p&gt;</div>
+                            <div class="ref-desc">Обычный текст (параграф). Каждый <code>&lt;p&gt;</code> начинается с новой строки</div>
+                            <div class="ref-example">Пример: <code>&lt;p&gt;Это мой текст&lt;/p&gt;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;div&gt;...&lt;/div&gt;</div>
+                            <div class="ref-desc">Контейнер — невидимая "коробка" для группировки элементов. Сам по себе ничего не показывает, но можно задать фон, рамку и т.д.</div>
+                            <div class="ref-example">Пример: <code>&lt;div style="background: yellow;"&gt;Блок&lt;/div&gt;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;span&gt;...&lt;/span&gt;</div>
+                            <div class="ref-desc">Как <code>&lt;div&gt;</code>, но для кусочка текста внутри строки. Не переносит на новую строку</div>
+                            <div class="ref-example">Пример: <code>Привет, &lt;span style="color:red;"&gt;мир&lt;/span&gt;!</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;b&gt;...&lt;/b&gt;</div>
+                            <div class="ref-desc">Делает текст <b>жирным</b></div>
+                            <div class="ref-example">Пример: <code>&lt;b&gt;Важно!&lt;/b&gt;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;i&gt;...&lt;/i&gt;</div>
+                            <div class="ref-desc">Делает текст <i>курсивом</i> (наклонным)</div>
+                            <div class="ref-example">Пример: <code>&lt;i&gt;красиво&lt;/i&gt;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;br&gt;</div>
+                            <div class="ref-desc">Перенос строки. Не имеет закрывающего тега!</div>
+                            <div class="ref-example">Пример: <code>Строка 1&lt;br&gt;Строка 2</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;a href="..."&gt;...&lt;/a&gt;</div>
+                            <div class="ref-desc">Ссылка. <code>href</code> — адрес, куда ведёт</div>
+                            <div class="ref-example">Пример: <code>&lt;a href="https://google.com"&gt;Google&lt;/a&gt;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;img src="..." /&gt;</div>
+                            <div class="ref-desc">Картинка. <code>src</code> — адрес изображения</div>
+                            <div class="ref-example">Пример: <code>&lt;img src="photo.jpg" /&gt;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">&lt;ul&gt; и &lt;li&gt;</div>
+                            <div class="ref-desc">Список с точками. <code>&lt;ul&gt;</code> — сам список, <code>&lt;li&gt;</code> — каждый пункт</div>
+                            <div class="ref-example">Пример: <code>&lt;ul&gt;&lt;li&gt;Пункт 1&lt;/li&gt;&lt;li&gt;Пункт 2&lt;/li&gt;&lt;/ul&gt;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">style="..."</div>
+                            <div class="ref-desc">Атрибут для добавления стилей прямо в тег. Внутри пишутся CSS-свойства</div>
+                            <div class="ref-example">Пример: <code>&lt;p style="color: blue; font-size: 20px;"&gt;Синий текст&lt;/p&gt;</code></div>
+                        </div>
+                    </div>
+                    <div class="ref-section hidden" id="ref-css">
+                        <div class="ref-card">
+                            <div class="ref-tag">color</div>
+                            <div class="ref-desc">Цвет текста. Можно писать по-английски или кодом</div>
+                            <div class="ref-example"><code>color: red;</code> или <code>color: #FF0000;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">background</div>
+                            <div class="ref-desc">Цвет фона</div>
+                            <div class="ref-example"><code>background: yellow;</code> или <code>background: #FDCB6E;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">font-size</div>
+                            <div class="ref-desc">Размер шрифта в пикселях. Обычный текст — 16px</div>
+                            <div class="ref-example"><code>font-size: 24px;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">font-family</div>
+                            <div class="ref-desc">Шрифт текста</div>
+                            <div class="ref-example"><code>font-family: Arial;</code> или <code>font-family: "Comic Sans MS";</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">text-align</div>
+                            <div class="ref-desc">Выравнивание текста: по левому краю, по центру или по правому</div>
+                            <div class="ref-example"><code>text-align: center;</code> или <code>text-align: left;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">padding</div>
+                            <div class="ref-desc">Отступ внутри элемента (между текстом и краем "коробки")</div>
+                            <div class="ref-example"><code>padding: 20px;</code> — отступ 20 пикселей со всех сторон</div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">margin</div>
+                            <div class="ref-desc">Отступ снаружи элемента (между "коробками")</div>
+                            <div class="ref-example"><code>margin: 10px;</code> — отступ 10 пикселей вокруг</div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">border</div>
+                            <div class="ref-desc">Рамка вокруг элемента</div>
+                            <div class="ref-example"><code>border: 2px solid red;</code> — красная рамка толщиной 2 пикселя</div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">border-radius</div>
+                            <div class="ref-desc">Скругление углов</div>
+                            <div class="ref-example"><code>border-radius: 16px;</code> — круглые углы. <code>border-radius: 50%;</code> — круг!</div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">Популярные цвета</div>
+                            <div class="ref-desc">
+                                <span style="color:#E17055">red</span>,
+                                <span style="color:#0984E3">blue</span>,
+                                <span style="color:#00B894">green</span>,
+                                <span style="color:#FDCB6E">yellow</span>,
+                                <span style="color:#6C5CE7">purple</span>,
+                                <span style="color:#E84393">pink</span>,
+                                <span style="color:#F39C12">orange</span>,
+                                white, black
+                            </div>
+                            <div class="ref-example">Или используй коды: <code>#FF6B6B</code>, <code>#4ECDC4</code>, <code>#45B7D1</code></div>
+                        </div>
+                    </div>
+                    <div class="ref-section hidden" id="ref-php">
+                        <div class="ref-card">
+                            <div class="ref-tag">echo "текст";</div>
+                            <div class="ref-desc">Вывести текст на страницу. Не забудь кавычки и точку с запятой!</div>
+                            <div class="ref-example"><code>echo "Привет!";</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">$переменная = значение;</div>
+                            <div class="ref-desc">Создать переменную. Имя всегда начинается с <code>$</code></div>
+                            <div class="ref-example"><code>$name = "Вася";</code> или <code>$age = 9;</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">. (точка)</div>
+                            <div class="ref-desc">Склеивает строки вместе</div>
+                            <div class="ref-example"><code>echo "Привет, " . $name . "!";</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">"текст $var"</div>
+                            <div class="ref-desc">В двойных кавычках переменные подставляются автоматически!</div>
+                            <div class="ref-example"><code>echo "Мне $age лет";</code> — выведет "Мне 9 лет"</div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">if / elseif / else</div>
+                            <div class="ref-desc">Проверка условий. Если условие верно — выполняется код в { }</div>
+                            <div class="ref-example"><code>if ($x > 10) { echo "Много!"; } else { echo "Мало!"; }</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">for ($i = 0; $i &lt; N; $i++)</div>
+                            <div class="ref-desc">Цикл — повторяет код N раз</div>
+                            <div class="ref-example"><code>for ($i = 1; $i &lt;= 5; $i++) { echo "⭐"; }</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">$arr = [...];</div>
+                            <div class="ref-desc">Массив — список значений. Нумерация с нуля!</div>
+                            <div class="ref-example"><code>$arr = ["яблоко", "банан"];</code> → <code>$arr[0]</code> = "яблоко"</div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">foreach ($arr as $item)</div>
+                            <div class="ref-desc">Пройти по каждому элементу массива</div>
+                            <div class="ref-example"><code>foreach ($fruits as $f) { echo $f; }</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">function имя($параметр)</div>
+                            <div class="ref-desc">Создать свою команду (функцию). <code>return</code> — вернуть результат</div>
+                            <div class="ref-example"><code>function add($a, $b) { return $a + $b; }</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">// комментарий</div>
+                            <div class="ref-desc">Текст после <code>//</code> — подсказка для тебя. Компьютер его игнорирует</div>
+                            <div class="ref-example"><code>// Это не выполнится</code></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Achievements Modal -->
+        <div class="modal hidden" id="achievements-modal">
+            <div class="modal-content achievements-content">
+                <div class="modal-header">
+                    <h2>🏅 Мои достижения</h2>
+                    <button class="modal-close" id="achievements-close">✕</button>
+                </div>
+                <div class="modal-body" id="achievements-body">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Projects Modal -->
+        <div class="modal hidden" id="projects-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>💾 Мои проекты</h2>
+                    <button class="modal-close" id="projects-close">✕</button>
+                </div>
+                <div class="modal-body" id="projects-body">
+                    <p>Здесь будут твои сохранённые проекты!</p>
+                    <button class="btn-primary" id="btn-save-project">Сохранить текущий проект</button>
+                    <div id="projects-list" class="projects-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/php-runner.js"></script>
+    <script src="js/template-engine.js"></script>
+    <script src="js/editor-manager.js"></script>
+    <script src="js/achievements.js"></script>
+    <script src="js/lesson-loader.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
