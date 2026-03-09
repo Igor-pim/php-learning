@@ -70,7 +70,7 @@ const LessonLoader = (() => {
             ],
             challenges: [
                 { task: 'Поменяй числа $a и $b и посмотри, как изменятся результаты!', check: 'notContains', checkValue: 'Числа:</b> 10 и 3' },
-                { task: 'Добавь вычисление остатка от деления (оператор %)', check: 'contains', checkValue: '%' },
+                { task: 'Добавь вычисление остатка от деления (оператор %)', check: 'containsWord', checkValue: '%' },
                 { task: 'Вычисли площадь комнаты: $width = 5; $height = 4; $area = $width * $height;', check: 'containsAny', checkValue: ['площадь', 'area', 'Площадь'] }
             ]
         },

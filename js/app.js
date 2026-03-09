@@ -256,7 +256,7 @@
 
         switch (challenge.check) {
             case 'contains':
-                passed = output.includes(challenge.checkValue);
+                passed = output.includes(challenge.checkValue) || phpCode.includes(challenge.checkValue);
                 break;
             case 'notContains':
                 passed = !output.includes(challenge.checkValue);
