@@ -93,10 +93,21 @@
             <div class="challenge-panel" id="challenge-panel">
                 <div class="challenge-header">
                     <span>🎯 Задание:</span>
-                    <span class="challenge-progress" id="challenge-progress">1/3</span>
+                    <div class="challenge-nav">
+                        <button class="task-nav-btn" id="task-prev" title="Предыдущая задача">←</button>
+                        <span class="challenge-progress" id="challenge-progress">1/3</span>
+                        <button class="task-nav-btn" id="task-next" title="Следующая задача">→</button>
+                    </div>
+                </div>
+                <div class="challenge-tabs" id="challenge-tabs">
+                    <!-- Filled by JS: tabs for each task -->
                 </div>
                 <p class="challenge-text" id="challenge-text">Напиши свой первый код!</p>
-                <p class="challenge-hint-auto">Выполни задание в коде и нажми <b>ЗАПУСТИТЬ!</b> — следующее откроется автоматически</p>
+                <div class="challenge-actions">
+                    <button class="task-hint-btn" id="task-hint-btn" title="Подсказка к задаче">💡 Подсказка к этой задаче</button>
+                    <span class="challenge-status" id="challenge-status"></span>
+                </div>
+                <div class="task-hint-bubble hidden" id="task-hint-bubble"></div>
             </div>
 
             <!-- Editors -->
@@ -314,24 +325,54 @@
                             <div class="ref-example"><code>if ($x > 10) { echo "Много!"; } else { echo "Мало!"; }</code></div>
                         </div>
                         <div class="ref-card">
+                            <div class="ref-tag">&amp;&amp; (И), || (ИЛИ), ! (НЕ)</div>
+                            <div class="ref-desc">Соединять условия. <code>&amp;&amp;</code> — оба верны, <code>||</code> — хоть одно, <code>!</code> — переворачивает</div>
+                            <div class="ref-example"><code>if ($age >= 12 &amp;&amp; $hasTicket) { ... }</code></div>
+                        </div>
+                        <div class="ref-card">
                             <div class="ref-tag">for ($i = 0; $i &lt; N; $i++)</div>
-                            <div class="ref-desc">Цикл — повторяет код N раз</div>
+                            <div class="ref-desc">Цикл — повторяет код N раз. <code>$i++</code> = увеличить на 1</div>
                             <div class="ref-example"><code>for ($i = 1; $i &lt;= 5; $i++) { echo "⭐"; }</code></div>
                         </div>
                         <div class="ref-card">
+                            <div class="ref-tag">while (условие) { ... }</div>
+                            <div class="ref-desc">Повторять, ПОКА условие истинно. Не забудь менять переменную!</div>
+                            <div class="ref-example"><code>while ($n &lt; 10) { echo $n; $n++; }</code></div>
+                        </div>
+                        <div class="ref-card">
                             <div class="ref-tag">$arr = [...];</div>
-                            <div class="ref-desc">Массив — список значений. Нумерация с нуля!</div>
+                            <div class="ref-desc">Массив — список значений. Нумерация с нуля! <code>$arr[0]</code> — первый</div>
                             <div class="ref-example"><code>$arr = ["яблоко", "банан"];</code> → <code>$arr[0]</code> = "яблоко"</div>
                         </div>
                         <div class="ref-card">
+                            <div class="ref-tag">$arr = ["ключ" =&gt; "значение"]</div>
+                            <div class="ref-desc">Ассоциативный массив (словарь). Доступ по ключу</div>
+                            <div class="ref-example"><code>$user = ["name" =&gt; "Вася", "age" =&gt; 9];</code> → <code>$user["name"]</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">count($arr)</div>
+                            <div class="ref-desc">Сколько элементов в массиве</div>
+                            <div class="ref-example"><code>echo count($fruits);</code> — выведет число</div>
+                        </div>
+                        <div class="ref-card">
                             <div class="ref-tag">foreach ($arr as $item)</div>
-                            <div class="ref-desc">Пройти по каждому элементу массива</div>
+                            <div class="ref-desc">Пройти по каждому элементу массива. С ключом: <code>as $key =&gt; $value</code></div>
                             <div class="ref-example"><code>foreach ($fruits as $f) { echo $f; }</code></div>
                         </div>
                         <div class="ref-card">
                             <div class="ref-tag">function имя($параметр)</div>
                             <div class="ref-desc">Создать свою команду (функцию). <code>return</code> — вернуть результат</div>
                             <div class="ref-example"><code>function add($a, $b) { return $a + $b; }</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">str_repeat("X", 5)</div>
+                            <div class="ref-desc">Повторить строку N раз</div>
+                            <div class="ref-example"><code>echo str_repeat("⭐", 5);</code> → <code>⭐⭐⭐⭐⭐</code></div>
+                        </div>
+                        <div class="ref-card">
+                            <div class="ref-tag">round($num, 2)</div>
+                            <div class="ref-desc">Округлить число до N знаков после запятой</div>
+                            <div class="ref-example"><code>echo round(10/3, 2);</code> → <code>3.33</code></div>
                         </div>
                         <div class="ref-card">
                             <div class="ref-tag">// комментарий</div>

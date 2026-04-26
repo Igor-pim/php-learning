@@ -1,5 +1,12 @@
 /**
- * App — главный контроллер приложения
+ * App — главный контроллер
+ *
+ * Главные изменения от старой версии:
+ *  - Навигация по задачам в уроке: ←/→/таб
+ *  - Любое задание можно переделать (сохраняется в lessonChallenges)
+ *  - Звёзды считаются как процент пройденных заданий
+ *  - Подсказки на КАЖДУЮ задачу (challenge.hint)
+ *  - Группировка уроков (basics / logic / loops / data / tools / final / boss)
  */
 (async function() {
     // ===== State =====
@@ -9,7 +16,7 @@
     let lessonStartTime = 0;
     let isRunning = false;
 
-    // ===== DOM Elements =====
+    // ===== DOM =====
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => document.querySelectorAll(sel);
 
@@ -29,6 +36,12 @@
     const challengePanel = $('#challenge-panel');
     const challengeText = $('#challenge-text');
     const challengeProgress = $('#challenge-progress');
+    const challengeTabs = $('#challenge-tabs');
+    const challengeStatus = $('#challenge-status');
+    const taskHintBtn = $('#task-hint-btn');
+    const taskHintBubble = $('#task-hint-bubble');
+    const taskPrev = $('#task-prev');
+    const taskNext = $('#task-next');
 
     const btnRun = $('#btn-run');
     const runStatus = $('#run-status');
@@ -45,11 +58,12 @@
     // ===== Loading Tips =====
     const tips = [
         'PHP создан Расмусом Лердорфом в 1995 году!',
-        'PHP расшифровывается как "PHP: Hypertext Preprocessor"',
         'Символ PHP — милый слоник 🐘',
-        '80% всех сайтов в мире используют PHP!',
-        'WordPress, Wikipedia, Facebook — все написаны на PHP!',
-        'Папа каждый день пишет на PHP — теперь и ты!',
+        '80% всех сайтов используют PHP!',
+        'WordPress, Wikipedia, ВКонтакте — все на PHP!',
+        'PHP = "PHP: Hypertext Preprocessor"',
+        'В PHP больше 1000 встроенных функций!',
+        'PHP может работать как в браузере, так и через командную строку',
     ];
 
     function showRandomTip() {
@@ -59,22 +73,16 @@
     // ===== Initialize =====
     showRandomTip();
 
-    // Init PHP engine
     const phpReady = await PhpRunner.init((percent, msg) => {
-        if (percent >= 0) {
-            loadingBarFill.style.width = percent + '%';
-        }
+        if (percent >= 0) loadingBarFill.style.width = percent + '%';
         if (percent === -1) {
-            // Error — show fallback mode
             loadingTip.textContent = msg;
             loadingBarFill.style.background = '#E17055';
         }
     });
 
-    // Init editors
     EditorManager.init();
 
-    // Hide loading, show app
     loadingScreen.classList.add('fade-out');
     setTimeout(() => {
         loadingScreen.style.display = 'none';
@@ -86,28 +94,62 @@
         runStatus.classList.add('error');
     }
 
-    // Render lesson grid
+    // ===== Lesson Grid =====
+    const GROUP_LABELS = {
+        basics: '🌱 Основы',
+        logic: '🔀 Условия и логика',
+        loops: '🔁 Циклы',
+        data: '📋 Данные',
+        tools: '⚡ Инструменты',
+        final: '🏆 Финал',
+        boss: '🎯 BOSS-уровни (закрепление)'
+    };
+
     renderLessonGrid();
     updateHeaderStats();
 
-    // ===== Lesson Grid =====
     function renderLessonGrid() {
         const lessons = LessonLoader.getAll();
         lessonGrid.innerHTML = '';
 
+        // Сгруппируем уроки по их group, сохраняя порядок
+        let lastGroup = null;
+        let groupIndex = 0;
+
         lessons.forEach((lesson, index) => {
+            // Заголовок группы
+            const group = lesson.group || 'basics';
+            if (group !== lastGroup) {
+                const header = document.createElement('div');
+                header.className = 'lesson-group-header';
+                header.textContent = GROUP_LABELS[group] || group;
+                lessonGrid.appendChild(header);
+                lastGroup = group;
+                groupIndex = 0;
+            }
+
+            const fullLesson = LessonLoader.getLesson(lesson.id);
+            const totalChallenges = fullLesson.challenges ? fullLesson.challenges.length : 3;
             const stars = Achievements.getLessonStars(lesson.id);
+            const doneObj = Achievements.getDoneChallenges(lesson.id);
+            const doneCount = Object.keys(doneObj).length;
+
             const starsStr = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
 
             const card = document.createElement('div');
-            card.className = 'lesson-card' + (stars === 3 ? ' completed' : '');
+            card.className = 'lesson-card';
+            if (stars === 3) card.classList.add('completed');
+            if (group === 'boss') card.classList.add('boss');
+
             card.innerHTML = `
                 <span class="lesson-card-number">${index + 1}</span>
                 <div class="lesson-card-icon">${lesson.icon}</div>
-                <h3>${lesson.title}</h3>
-                <p>${lesson.concepts.join(', ')}</p>
-                <div class="lesson-card-stars">${starsStr}</div>
-                <span class="lesson-card-difficulty">${'●'.repeat(lesson.difficulty)}${'○'.repeat(3 - lesson.difficulty)}</span>
+                <h3>${escapeHtml(lesson.title)}</h3>
+                <p>${escapeHtml(lesson.concepts.join(', '))}</p>
+                <div class="lesson-card-meta">
+                    <div class="lesson-card-stars">${starsStr}</div>
+                    <span class="lesson-card-tasks">${doneCount}/${totalChallenges} задач</span>
+                </div>
             `;
 
             card.addEventListener('click', () => openLesson(lesson.id));
@@ -121,11 +163,16 @@
         if (!lesson) return;
 
         currentLesson = lesson;
+        // Открываем первую НЕ пройденную задачу, или 0 если все пройдены
+        const done = Achievements.getDoneChallenges(lessonId);
         currentChallengeIndex = 0;
+        for (let i = 0; i < lesson.challenges.length; i++) {
+            if (!done[i]) { currentChallengeIndex = i; break; }
+            if (i === lesson.challenges.length - 1) currentChallengeIndex = 0;
+        }
         currentHintIndex = 0;
         lessonStartTime = Date.now();
 
-        // Update UI
         lessonTitle.textContent = `${lesson.icon} ${lesson.title}`;
         mascotText.innerHTML = lesson.mascotSays;
 
@@ -136,32 +183,26 @@
             scratchComparison.classList.add('hidden');
         }
 
-        // Load saved code or starter code
         const saved = loadSavedCode(lessonId);
         EditorManager.setHtml(saved ? saved.html : lesson.starterHtml);
         EditorManager.setPhp(saved ? saved.php : lesson.starterPhp);
 
-        // Show challenge
+        renderChallengeTabs();
         updateChallenge();
 
-        // Reset preview
         previewArea.innerHTML = '<div class="preview-placeholder">Нажми <strong>ЗАПУСТИТЬ!</strong> чтобы увидеть результат</div>';
         runStatus.textContent = '';
         runStatus.className = 'run-status';
+        taskHintBubble.classList.add('hidden');
 
-        // Show workspace, hide selector
         lessonSelector.classList.add('hidden');
         workspace.classList.remove('hidden');
 
         EditorManager.focus('php');
     }
 
-    // ===== Close Lesson =====
     function closeLesson() {
-        // Save current code
-        if (currentLesson) {
-            saveCode(currentLesson.id);
-        }
+        if (currentLesson) saveCode(currentLesson.id);
 
         workspace.classList.add('hidden');
         lessonSelector.classList.remove('hidden');
@@ -190,14 +231,10 @@
         const phpCode = EditorManager.getPhp();
         const htmlTemplate = EditorManager.getHtml();
 
-        // Save code
         saveCode(currentLesson.id);
 
-        // Record run
-        const curiousBadge = Achievements.recordRun(currentLesson.id);
-        if (curiousBadge) {
-            showBadgeUnlock('curious_coder');
-        }
+        const newBadges = Achievements.recordRun(currentLesson.id);
+        newBadges.forEach(b => showBadgeUnlock(b));
 
         const result = await PhpRunner.run(phpCode);
 
@@ -206,7 +243,6 @@
         btnRun.innerHTML = '<span class="run-icon">▶</span> ЗАПУСТИТЬ!';
 
         if (result.success) {
-            // Render output into HTML template
             const rendered = TemplateEngine.render(htmlTemplate, result.output);
             previewArea.innerHTML = rendered;
             previewArea.classList.add('success-flash');
@@ -215,15 +251,13 @@
             runStatus.textContent = '✓ Готово!';
             runStatus.className = 'run-status success';
 
-            // Check challenge
             checkChallenge(result.output, phpCode);
         } else {
-            // Show error in preview
             previewArea.innerHTML = `
-                <div style="padding: 20px; color: #E17055; font-family: monospace;">
+                <div style="padding:20px; color:#E17055; font-family:monospace;">
                     <h3>😅 Ошибка в коде:</h3>
-                    <pre style="white-space: pre-wrap; margin-top: 10px; background: #fff3f0; padding: 12px; border-radius: 8px;">${escapeHtml(result.error)}</pre>
-                    <p style="margin-top: 12px; color: #666;">Не переживай, ошибки — это нормально! Проверь код и попробуй снова.</p>
+                    <pre style="white-space:pre-wrap; margin-top:10px; background:#fff3f0; padding:12px; border-radius:8px;">${escapeHtml(result.error)}</pre>
+                    <p style="margin-top:12px; color:#666;">Не переживай, ошибки — это нормально! Проверь код и попробуй снова.</p>
                 </div>
             `;
             runStatus.textContent = '✗ Есть ошибка';
@@ -231,99 +265,170 @@
         }
     }
 
-    // ===== Challenge Checking =====
+    // ===== Challenge logic =====
+    function renderChallengeTabs() {
+        if (!currentLesson || !currentLesson.challenges) return;
+        const total = currentLesson.challenges.length;
+        const done = Achievements.getDoneChallenges(currentLesson.id);
+
+        challengeTabs.innerHTML = '';
+        for (let i = 0; i < total; i++) {
+            const tab = document.createElement('button');
+            tab.className = 'challenge-tab';
+            if (i === currentChallengeIndex) tab.classList.add('active');
+            if (done[i]) tab.classList.add('done');
+            tab.textContent = done[i] ? `✓ ${i + 1}` : `${i + 1}`;
+            tab.title = `Задача ${i + 1}${done[i] ? ' (выполнена)' : ''}`;
+            tab.addEventListener('click', () => goToChallenge(i));
+            challengeTabs.appendChild(tab);
+        }
+    }
+
+    function goToChallenge(index) {
+        if (!currentLesson || !currentLesson.challenges) return;
+        if (index < 0 || index >= currentLesson.challenges.length) return;
+        currentChallengeIndex = index;
+        taskHintBubble.classList.add('hidden');
+        renderChallengeTabs();
+        updateChallenge();
+    }
+
     function updateChallenge() {
         if (!currentLesson || !currentLesson.challenges) return;
 
         const challenges = currentLesson.challenges;
-        if (currentChallengeIndex >= challenges.length) {
-            challengeText.textContent = '🎉 Все задания выполнены! Можешь экспериментировать дальше!';
-            challengeProgress.textContent = `${challenges.length}/${challenges.length}`;
-            return;
+        const ch = challenges[currentChallengeIndex];
+        const done = Achievements.isChallengeDone(currentLesson.id, currentChallengeIndex);
+
+        challengeText.innerHTML = ch.task;
+        challengeProgress.textContent = `${currentChallengeIndex + 1}/${challenges.length}`;
+
+        if (done) {
+            challengeStatus.textContent = '✓ Уже выполнено — можно переделать';
+            challengeStatus.classList.add('done');
+        } else {
+            challengeStatus.textContent = '';
+            challengeStatus.classList.remove('done');
         }
 
-        const challenge = challenges[currentChallengeIndex];
-        challengeText.textContent = challenge.task;
-        challengeProgress.textContent = `${currentChallengeIndex + 1}/${challenges.length}`;
+        // Кнопка подсказки
+        taskHintBtn.style.display = ch.hint ? 'inline-block' : 'none';
+
+        // Стрелки
+        taskPrev.disabled = currentChallengeIndex === 0;
+        taskNext.disabled = currentChallengeIndex >= challenges.length - 1;
+
+        // Активная вкладка
+        $$('.challenge-tab').forEach((t, i) => {
+            t.classList.toggle('active', i === currentChallengeIndex);
+        });
     }
 
     function checkChallenge(output, phpCode) {
         if (!currentLesson || !currentLesson.challenges) return;
-        if (currentChallengeIndex >= currentLesson.challenges.length) return;
+        const ch = currentLesson.challenges[currentChallengeIndex];
+        if (!ch) return;
 
-        const challenge = currentLesson.challenges[currentChallengeIndex];
-        let passed = false;
+        const wasAlreadyDone = Achievements.isChallengeDone(currentLesson.id, currentChallengeIndex);
+        const passed = LessonLoader.checkChallenge(ch, phpCode, output);
 
-        switch (challenge.check) {
-            case 'contains':
-                passed = output.includes(challenge.checkValue) || phpCode.includes(challenge.checkValue);
-                break;
-            case 'notContains':
-                passed = !output.includes(challenge.checkValue);
-                break;
-            case 'notEquals':
-                passed = !output.includes(challenge.checkValue);
-                break;
-            case 'containsWord':
-                passed = phpCode.includes(challenge.checkValue);
-                break;
-            case 'containsAny':
-                passed = challenge.checkValue.some(v => output.includes(v) || phpCode.includes(v));
-                break;
-            case 'outputLineCount':
-                passed = output.split('<br>').length >= challenge.checkValue ||
-                         output.split('\n').length >= challenge.checkValue;
-                break;
-            case 'countOccurrences': {
-                const count = (output.match(new RegExp(escapeRegex(challenge.checkValue.text), 'g')) || []).length;
-                passed = count >= challenge.checkValue.min;
-                break;
+        if (!passed) {
+            if (!wasAlreadyDone) {
+                runStatus.textContent = '🔍 Код запущен. Задача ещё не выполнена — попробуй ещё!';
+                runStatus.className = 'run-status';
             }
+            return;
         }
 
-        if (passed) {
-            currentChallengeIndex++;
-            const totalChallenges = currentLesson.challenges.length;
+        // Помечаем задачу пройденной
+        Achievements.markChallenge(currentLesson.id, currentChallengeIndex);
 
-            // Update stars
-            Achievements.setLessonStars(currentLesson.id, currentChallengeIndex);
+        // Обновляем звёзды по проценту пройденных задач
+        const total = currentLesson.challenges.length;
+        const newStars = Achievements.updateLessonStars(currentLesson.id, total);
 
-            // Show success notification
-            runStatus.textContent = `🎯 Задание выполнено! (${currentChallengeIndex}/${totalChallenges})`;
+        if (!wasAlreadyDone) {
+            runStatus.textContent = `🎯 Задание ${currentChallengeIndex + 1} выполнено!`;
             runStatus.className = 'run-status success';
+        } else {
+            runStatus.textContent = `✓ Задание ${currentChallengeIndex + 1} — снова правильно!`;
+            runStatus.className = 'run-status success';
+        }
 
-            // Check if all challenges completed
-            if (currentChallengeIndex >= totalChallenges) {
-                // Unlock badge
+        // Перерисовываем вкладки чтобы появилась галочка
+        renderChallengeTabs();
+
+        // Если все задачи выполнены — анимация и бейдж
+        const doneCount = Object.keys(Achievements.getDoneChallenges(currentLesson.id)).length;
+
+        if (doneCount === total) {
+            // Бейдж урока
+            if (currentLesson.badgeId) {
                 const newBadge = Achievements.unlock(currentLesson.badgeId);
-                if (newBadge) {
-                    showBadgeUnlock(currentLesson.badgeId);
-                }
+                if (newBadge) showBadgeUnlock(currentLesson.badgeId);
+            }
 
-                // Check speed badge
-                const elapsed = (Date.now() - lessonStartTime) / 1000;
-                if (elapsed < 120) {
-                    const speedBadge = Achievements.unlock('speed_runner');
-                    if (speedBadge) {
-                        setTimeout(() => showBadgeUnlock('speed_runner'), 2000);
-                    }
-                }
-
-                // Check if all lessons completed
-                if (Achievements.getUnlockedCount() >= 10) {
-                    setTimeout(() => showConfetti(), 1000);
+            // Speed runner
+            const elapsed = (Date.now() - lessonStartTime) / 1000;
+            if (elapsed < 120) {
+                if (Achievements.unlock('speed_runner')) {
+                    setTimeout(() => showBadgeUnlock('speed_runner'), 1500);
                 }
             }
 
-            updateChallenge();
-            updateHeaderStats();
+            // Этапные бейджи
+            checkMilestoneBadges();
+
+            // Конфетти
+            setTimeout(() => showConfetti(), 500);
+
+            // Если есть следующая задача — авто-переход на неё через 2 сек
+            // Но не переключаемся, если это последняя — пусть остаётся
+        } else {
+            // Авто-переход на следующую невыполненную задачу через 1.2 сек
+            setTimeout(() => {
+                if (!currentLesson) return;
+                const done = Achievements.getDoneChallenges(currentLesson.id);
+                for (let i = currentChallengeIndex + 1; i < total; i++) {
+                    if (!done[i]) { goToChallenge(i); return; }
+                }
+                for (let i = 0; i < currentChallengeIndex; i++) {
+                    if (!done[i]) { goToChallenge(i); return; }
+                }
+            }, 1200);
+        }
+
+        updateHeaderStats();
+    }
+
+    function checkMilestoneBadges() {
+        const allLessons = LessonLoader.getAll();
+        let basicsDone = 0;
+        let totalDone = 0;
+        let allThree = 0;
+
+        allLessons.forEach(l => {
+            const stars = Achievements.getLessonStars(l.id);
+            if (stars >= 1) totalDone++;
+            if (stars >= 3) allThree++;
+            const idx = LessonLoader.getLessonIndex(l.id);
+            if (idx < 4 && stars >= 1) basicsDone++;
+        });
+
+        if (basicsDone >= 4 && Achievements.unlock('all_basics')) {
+            setTimeout(() => showBadgeUnlock('all_basics'), 2500);
+        }
+        if (totalDone >= 8 && Achievements.unlock('half_way')) {
+            setTimeout(() => showBadgeUnlock('half_way'), 3000);
+        }
+        if (allThree >= allLessons.length && Achievements.unlock('all_complete')) {
+            setTimeout(() => showBadgeUnlock('all_complete'), 3500);
         }
     }
 
-    // ===== Hints =====
+    // ===== Hints (per-lesson, modal) =====
     function showHint() {
         if (!currentLesson || !currentLesson.hints) return;
-
         currentHintIndex = 0;
         updateHintDisplay();
         hintModal.classList.remove('hidden');
@@ -335,14 +440,27 @@
         hintCounter.textContent = `${currentHintIndex + 1}/${hints.length}`;
     }
 
-    // ===== Badge Unlock Animation =====
+    // ===== Per-task hint =====
+    function toggleTaskHint() {
+        if (!currentLesson) return;
+        const ch = currentLesson.challenges[currentChallengeIndex];
+        if (!ch || !ch.hint) return;
+
+        if (taskHintBubble.classList.contains('hidden')) {
+            taskHintBubble.innerHTML = ch.hint;
+            taskHintBubble.classList.remove('hidden');
+        } else {
+            taskHintBubble.classList.add('hidden');
+        }
+    }
+
+    // ===== Badge Unlock =====
     function showBadgeUnlock(badgeId) {
         const badge = Achievements.BADGES.find(b => b.id === badgeId);
         if (!badge) return;
 
         showConfetti();
 
-        // Show notification
         const notif = document.createElement('div');
         notif.style.cssText = `
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
@@ -352,7 +470,7 @@
             box-shadow: 0 8px 32px rgba(108,92,231,0.4);
             animation: slideDown 0.5s ease-out;
         `;
-        notif.innerHTML = `<div style="font-size:2rem;">${badge.icon}</div>Бейдж: ${badge.name}!`;
+        notif.innerHTML = `<div style="font-size:2rem;">${badge.icon}</div>Бейдж: ${escapeHtml(badge.name)}!`;
         document.body.appendChild(notif);
 
         setTimeout(() => {
@@ -381,9 +499,7 @@
             container.appendChild(piece);
         }
 
-        setTimeout(() => {
-            container.innerHTML = '';
-        }, 4000);
+        setTimeout(() => { container.innerHTML = ''; }, 4000);
     }
 
     // ===== Header Stats =====
@@ -409,15 +525,12 @@
         try {
             const saved = localStorage.getItem('php-trainer-code-' + lessonId);
             return saved ? JSON.parse(saved) : null;
-        } catch (e) {
-            return null;
-        }
+        } catch (e) { return null; }
     }
 
     // ===== Projects =====
     function saveProject() {
         if (!currentLesson) return;
-
         const name = prompt('Название проекта:');
         if (!name) return;
 
@@ -437,9 +550,7 @@
     function loadProjects() {
         try {
             return JSON.parse(localStorage.getItem('php-trainer-projects') || '[]');
-        } catch (e) {
-            return [];
-        }
+        } catch (e) { return []; }
     }
 
     function renderProjects() {
@@ -458,7 +569,7 @@
             item.innerHTML = `
                 <div>
                     <h4>${escapeHtml(project.name)}</h4>
-                    <p>${project.date}</p>
+                    <p>${escapeHtml(project.date)}</p>
                 </div>
                 <div class="project-actions">
                     <button class="btn-small" onclick="App.loadProject(${index})">Открыть</button>
@@ -481,8 +592,8 @@
             item.innerHTML = `
                 <span class="achievement-icon">${badge.unlocked ? badge.icon : '🔒'}</span>
                 <div class="achievement-info">
-                    <h4>${badge.name}</h4>
-                    <p>${badge.desc}</p>
+                    <h4>${escapeHtml(badge.name)}</h4>
+                    <p>${escapeHtml(badge.desc)}</p>
                 </div>
             `;
             body.appendChild(item);
@@ -490,14 +601,10 @@
     }
 
     // ===== Preview Resize =====
-    let lastPreviewContent = '';
-
     function initPreviewResize() {
         const handle = $('#preview-resize-handle');
         const container = $('#preview-container');
-        let startY = 0;
-        let startHeight = 0;
-        let isDragging = false;
+        let startY = 0, startHeight = 0, isDragging = false;
 
         handle.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -511,7 +618,6 @@
 
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-            // Тянем вверх — высота увеличивается (startY > clientY)
             const delta = startY - e.clientY;
             const newHeight = Math.max(80, Math.min(window.innerHeight * 0.8, startHeight + delta));
             container.style.height = newHeight + 'px';
@@ -525,10 +631,9 @@
             document.body.style.userSelect = '';
         });
     }
-
     initPreviewResize();
 
-    // ===== Открыть в новом окне =====
+    // ===== Open in New Window =====
     function openInNewWindow() {
         const content = previewArea.innerHTML;
         if (!content || previewArea.querySelector('.preview-placeholder')) return;
@@ -546,9 +651,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мой сайт — PHP Trainer</title>
-    <style>
-        body { margin: 0; padding: 16px; font-family: 'Segoe UI', sans-serif; }
-    </style>
+    <style>body { margin: 0; padding: 16px; font-family: 'Segoe UI', sans-serif; }</style>
 </head>
 <body>${content}</body>
 </html>`);
@@ -560,12 +663,8 @@
     // ===== Utilities =====
     function escapeHtml(text) {
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = String(text == null ? '' : text);
         return div.innerHTML;
-    }
-
-    function escapeRegex(string) {
-        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     // ===== Event Listeners =====
@@ -575,11 +674,11 @@
 
     $('#btn-reset').addEventListener('click', () => {
         if (!currentLesson) return;
-        if (confirm('Сбросить код к начальному? Твои изменения будут потеряны!')) {
+        if (confirm('Сбросить код к начальному? Прогресс по задачам сохранится, но код вернётся к исходному.')) {
             EditorManager.setHtml(currentLesson.starterHtml);
             EditorManager.setPhp(currentLesson.starterPhp);
-            currentChallengeIndex = 0;
-            updateChallenge();
+            // Сбрасываем сохранённый код
+            try { localStorage.removeItem('php-trainer-code-' + currentLesson.id); } catch (e) {}
             previewArea.innerHTML = '<div class="preview-placeholder">Нажми <strong>ЗАПУСТИТЬ!</strong> чтобы увидеть результат</div>';
         }
     });
@@ -597,6 +696,13 @@
         updateHintDisplay();
     });
 
+    // Per-task hint
+    taskHintBtn.addEventListener('click', toggleTaskHint);
+
+    // Task navigation
+    taskPrev.addEventListener('click', () => goToChallenge(currentChallengeIndex - 1));
+    taskNext.addEventListener('click', () => goToChallenge(currentChallengeIndex + 1));
+
     // Reference modal
     $('#btn-reference').addEventListener('click', () => {
         $('#reference-modal').classList.remove('hidden');
@@ -605,7 +711,6 @@
         $('#reference-modal').classList.add('hidden');
     });
 
-    // Reference tabs
     $$('.ref-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             $$('.ref-tab').forEach(t => t.classList.remove('active'));
@@ -634,32 +739,38 @@
     });
     $('#btn-save-project').addEventListener('click', saveProject);
 
-    // Close modals on backdrop click
     $$('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.classList.add('hidden');
         });
     });
 
-    // Keyboard shortcut
+    // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
+        // Ctrl+Enter — запуск
         if (e.ctrlKey && e.key === 'Enter') {
             e.preventDefault();
             runCode();
         }
+        // Alt + ← / → — переход между задачами
+        if (e.altKey && e.key === 'ArrowLeft') {
+            e.preventDefault();
+            goToChallenge(currentChallengeIndex - 1);
+        }
+        if (e.altKey && e.key === 'ArrowRight') {
+            e.preventDefault();
+            goToChallenge(currentChallengeIndex + 1);
+        }
     });
 
-    // ===== Global API for inline handlers =====
+    // Global API
     window.App = {
         loadProject(index) {
             const projects = loadProjects();
             const project = projects[index];
             if (!project) return;
 
-            // Open the lesson first
             openLesson(project.lessonId);
-
-            // Then override with saved project code
             EditorManager.setHtml(project.html);
             EditorManager.setPhp(project.php);
 
@@ -675,7 +786,7 @@
         }
     };
 
-    // Add slideDown animation
+    // SlideDown animation
     const style = document.createElement('style');
     style.textContent = `
         @keyframes slideDown {
